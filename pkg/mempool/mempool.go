@@ -41,7 +41,11 @@ func ListenForBlocks(newBlock chan models.NewBlock, network string, mempoolSpace
 			return
 		}
 		log.Printf("\nmessage %s", message)
-		newBlock <- models.NewBlock{IsNew: true, Network: network}
+		if len(network) == 0 {
+			newBlock <- models.NewBlock{IsNew: true, Network: nil}
+		} else {
+			newBlock <- models.NewBlock{IsNew: true, Network: &network}
+		}
 	}
 	ListenForBlocks(newBlock, network, mempoolSpaceCtx)
 }
@@ -57,12 +61,12 @@ func SetupClient(network string, mempoolSpaceCtx context.Context) (*websocket.Co
 
 	conn, _, err := websocket.DefaultDialer.DialContext(mempoolSpaceCtx, urlStr, nil)
 	if err != nil {
-		fmt.Printf("error connecting to mempool.space websocket %s", err.Error())
+		log.Printf("error connecting to mempool.space websocket %s", err.Error())
 		return nil, err
 	}
 	errWrite := conn.WriteJSON(models.MempoolListen{Action: "want", Data: []string{"blocks"}})
 	if errWrite != nil {
-		fmt.Printf("error setting up listen for 'blocks' %s", errWrite.Error())
+		log.Printf("error setting up listen for 'blocks' %s", errWrite.Error())
 		return nil, errWrite
 	}
 	log.Println("setting up listen for 'blocks' from mempool.space websocket")
@@ -94,8 +98,7 @@ func KeepAlive(c *websocket.Conn, timeout time.Duration) {
 	}()
 }
 
-func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan models.NewBlock, slackClient *slack.Client, ctx context.Context) {
-	set := utils.NewSet[models.WatchTx]()
+func ListenForUserTrans(set *utils.Set[models.WatchTx], watchTransaction chan models.WatchTx, newBlock chan models.NewBlock, slackClient *slack.Client, ctx context.Context) {
 	go func(set *utils.Set[models.WatchTx], watchTransaction chan models.WatchTx) {
 		for {
 			select {
@@ -116,12 +119,12 @@ func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan mode
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Shutting down watch transaction listener")
+				log.Println("Shutting down send watch message")
 				return
 			case newBlc := <-newBlock:
 				log.Printf("New Block %v", newBlc)
 				if newBlc.IsNew {
-					SendMessageForWatched(set, slackClient)
+					SendMessageForWatched(set, newBlc.Network, slackClient)
 				}
 			default:
 				time.Sleep(time.Second * 2)
@@ -131,17 +134,23 @@ func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan mode
 
 }
 
-func SendMessageForWatched(set *utils.Set[models.WatchTx], slackClient *slack.Client) {
-
+func SendMessageForWatched(set *utils.Set[models.WatchTx], network *string, slackClient *slack.Client) {
+	formatNetwork := ""
+	if network != nil {
+		formatNetwork = *network
+	}
 	for _, watchTx := range set.Keys() {
-		if !set.Contains(watchTx) {
+		log.Printf("\nnetwork: %s watchTx: %v", formatNetwork, watchTx)
+		if watchTx.Network != formatNetwork {
 			continue
 		}
-		if watchTx.ConfsCount > 0 && watchTx.Confs < watchTx.ConfsCount+1 {
+		if watchTx.ConfsCount > 0 && watchTx.Confs < (watchTx.ConfsCount+1) {
 			log.Printf("watching transaction has confsCount >0: %v", watchTx)
 			set.Remove(watchTx)
-			watchTx.ConfsCount++
+			log.Printf("watchTx %v", watchTx)
+			watchTx.ConfsCount = watchTx.ConfsCount + 1
 			curTime := time.Now().UTC()
+			log.Printf("watchTx %v", watchTx)
 			set.Add(watchTx, curTime.Format("20060102150405"))
 			go SendUpdatedConfMessage(watchTx, slackClient)
 		} else if watchTx.ConfsCount == 0 {
@@ -157,11 +166,12 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], slackClient *slack.Cl
 			}
 			log.Printf("confirmed results %v", confirmed)
 			set.Remove(watchTx)
-			watchTx.ConfsCount++
-			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
+			watchTx.ConfsCount = watchTx.ConfsCount + 1
 			curTime := time.Now().UTC()
+			log.Printf("watchTx %v", watchTx)
 			set.Add(watchTx, curTime.Format("20060102150405"))
-		} else if watchTx.ConfsCount > 0 && watchTx.Confs > watchTx.ConfsCount+1 {
+			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
+		} else if watchTx.ConfsCount > 0 && watchTx.Confs == watchTx.ConfsCount {
 			log.Printf("removing watchTx %v", watchTx)
 			set.Remove(watchTx)
 		}
@@ -169,11 +179,11 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], slackClient *slack.Cl
 
 }
 
-func CheckTransactionWasConfirmed(txId string, network *string) (*models.ConfirmedPayload, error) {
+func CheckTransactionWasConfirmed(txId string, network string) (*models.ConfirmedPayload, error) {
 
 	mempoolSpaceUrl := ""
-	if network != nil {
-		lowerNetwork := strings.ToLower(*network)
+	if len(network) > 0 {
+		lowerNetwork := strings.ToLower(network)
 		mempoolSpaceUrl = fmt.Sprintf("https://mempool.space/%s/api/tx/%s/status", txId, lowerNetwork)
 	} else {
 		mempoolSpaceUrl = fmt.Sprintf("https://mempool.space/api/tx/%s/status", txId)

@@ -6,16 +6,16 @@ type MempoolListen struct {
 }
 
 type NewBlock struct {
-	IsNew   bool   `json:"isNew"`
-	Network string `json:"network"`
+	IsNew   bool    `json:"isNew"`
+	Network *string `json:"network"`
 }
 
 type WatchTx struct {
-	TxId       string  `json:"txId"`
-	Confs      int     `json:"confs"`
-	Network    *string `json:"network"`
-	Channel    string  `json:"channel"`
-	ConfsCount int     `json:"confsCount"`
+	TxId       string `json:"txId"`
+	Confs      int    `json:"confs"`
+	Network    string `json:"network"`
+	Channel    string `json:"channel"`
+	ConfsCount int    `json:"confsCount"`
 }
 
 type ConfirmedPayload struct {

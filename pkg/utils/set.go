@@ -4,6 +4,8 @@ import (
 	"sync"
 )
 
+//NOTE: for the map uniqueness to work, the struct must not hold any pointers
+
 type Set[T comparable] struct {
 	mutex sync.RWMutex
 	dic   map[T]string
@@ -18,7 +20,10 @@ func NewSet[T comparable]() *Set[T] {
 func (s *Set[T]) Add(value T, timestamp string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.dic[value] = timestamp
+	_, c := s.dic[value]
+	if !c {
+		s.dic[value] = timestamp
+	}
 }
 
 func (s *Set[T]) Remove(value T) {

@@ -12,3 +12,7 @@ Install:
 
 Run (make sure to change default.env to .env & update the values first):
 - `go run cmd/main.go`
+
+
+##### NOTE:
+- If the bot goes down, the state of all transactions being watched will be saved in a .bin file & it will be reloaded on the next successful startup

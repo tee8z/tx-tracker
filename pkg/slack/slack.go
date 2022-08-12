@@ -72,8 +72,8 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 		watchTransaction <- *watchTx
 	}
 	network := "mainnet"
-	if watchTx.Network != nil {
-		network = *watchTx.Network
+	if len(watchTx.Network) > 0 {
+		network = watchTx.Network
 	}
 	attachment := slack.Attachment{}
 	if errConv != nil {
@@ -113,10 +113,10 @@ func ParseMessage(rawMessage string) (*models.WatchTx, error) {
 	}
 	networkText := networkMatch.Find([]byte(rawMessage))
 
-	var network *string = nil
+	var network string = ""
 	if networkText != nil {
 		rawNetwork := strings.Split(string(networkText), ": ")[1]
-		network = &rawNetwork
+		network = rawNetwork
 	}
 	confirmText := confirmsMatch.Find([]byte(rawMessage))
 
