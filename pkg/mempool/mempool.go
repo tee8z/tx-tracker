@@ -140,6 +140,7 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], slackClient *slack.Cl
 			watchTx.ConfsCount++
 			curTime := time.Now().UTC()
 			set.Add(watchTx, curTime.Format("20060102150405"))
+			go SendUpdatedConfMessage(watchTx, slackClient)
 		} else if watchTx.ConfsCount == 0 {
 			log.Printf("watching transaction has confsCount = 0: %v", watchTx)
 			//check if in recent block
