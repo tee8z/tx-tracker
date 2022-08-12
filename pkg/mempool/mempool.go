@@ -18,7 +18,7 @@ import (
 	"github.com/slack-go/slack"
 )
 
-func ListenForBlocks(newBlock chan bool, network string, mempoolSpaceCtx context.Context) {
+func ListenForBlocks(newBlock chan models.NewBlock, network string, mempoolSpaceCtx context.Context) {
 	closeByApi, errRegex := regexp.Compile(`(close 1006 \(abnormal closure\))`)
 	if errRegex != nil {
 		log.Fatal(errRegex)
@@ -41,7 +41,7 @@ func ListenForBlocks(newBlock chan bool, network string, mempoolSpaceCtx context
 			return
 		}
 		log.Printf("\nmessage %s", message)
-		newBlock <- true
+		newBlock <- models.NewBlock{IsNew: true, Network: network}
 	}
 	ListenForBlocks(newBlock, network, mempoolSpaceCtx)
 }
@@ -94,7 +94,7 @@ func KeepAlive(c *websocket.Conn, timeout time.Duration) {
 	}()
 }
 
-func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan bool, slackClient *slack.Client, ctx context.Context) {
+func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan models.NewBlock, slackClient *slack.Client, ctx context.Context) {
 	set := utils.NewSet[models.WatchTx]()
 	go func(set *utils.Set[models.WatchTx], watchTransaction chan models.WatchTx) {
 		for {
@@ -112,7 +112,7 @@ func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan bool
 		}
 	}(set, watchTransaction)
 
-	go func(set *utils.Set[models.WatchTx], slackClient *slack.Client, newBlock chan bool) {
+	go func(set *utils.Set[models.WatchTx], slackClient *slack.Client, newBlock chan models.NewBlock) {
 		for {
 			select {
 			case <-ctx.Done():
@@ -120,7 +120,7 @@ func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan bool
 				return
 			case newBlc := <-newBlock:
 				log.Printf("New Block %v", newBlc)
-				if newBlc {
+				if newBlc.IsNew {
 					SendMessageForWatched(set, slackClient)
 				}
 			default:
@@ -134,6 +134,9 @@ func ListenForUserTrans(watchTransaction chan models.WatchTx, newBlock chan bool
 func SendMessageForWatched(set *utils.Set[models.WatchTx], slackClient *slack.Client) {
 
 	for _, watchTx := range set.Keys() {
+		if !set.Contains(watchTx) {
+			continue
+		}
 		if watchTx.ConfsCount > 0 && watchTx.Confs < watchTx.ConfsCount+1 {
 			log.Printf("watching transaction has confsCount >0: %v", watchTx)
 			set.Remove(watchTx)
@@ -158,7 +161,7 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], slackClient *slack.Cl
 			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
 			curTime := time.Now().UTC()
 			set.Add(watchTx, curTime.Format("20060102150405"))
-		} else {
+		} else if watchTx.ConfsCount > 0 && watchTx.Confs > watchTx.ConfsCount+1 {
 			log.Printf("removing watchTx %v", watchTx)
 			set.Remove(watchTx)
 		}
@@ -188,6 +191,7 @@ func CheckTransactionWasConfirmed(txId string, network *string) (*models.Confirm
 		log.Printf("failed to read body from response of mempool.space")
 		return nil, readErr
 	}
+	log.Printf("\npayload %s", body)
 	confirmed := &models.ConfirmedPayload{}
 	errMarshal := json.Unmarshal(body, confirmed)
 	if errMarshal != nil {
@@ -199,7 +203,7 @@ func CheckTransactionWasConfirmed(txId string, network *string) (*models.Confirm
 
 func SendFirstConfMessage(watchTx models.WatchTx, confirmed models.ConfirmedPayload, slackClient *slack.Client) {
 	attachment := slack.Attachment{}
-	attachment.Text = fmt.Sprintf("Your transaction %s has been picked up from the mempool and confirmed in block %s at %s! ", watchTx.TxId, confirmed.BlockHash, utils.ConvertTimestamp(confirmed.BlockTime))
+	attachment.Text = fmt.Sprintf("Your transaction %s has been picked up from the mempool and confirmed in block %s at %s! ", watchTx.TxId, *confirmed.BlockHash, utils.ConvertTimestamp(*confirmed.BlockTime))
 	attachment.Color = "#4af030"
 	_, _, err := slackClient.PostMessage(watchTx.Channel, slack.MsgOptionAttachments(attachment))
 	if err != nil {

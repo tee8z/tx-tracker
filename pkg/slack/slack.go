@@ -71,13 +71,16 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 		watchTx.Channel = event.Channel
 		watchTransaction <- *watchTx
 	}
-
+	network := "mainnet"
+	if watchTx.Network != nil {
+		network = *watchTx.Network
+	}
 	attachment := slack.Attachment{}
 	if errConv != nil {
 		attachment.Text = fmt.Sprintf("Failed to setup watcher, check your format? %s", errConv)
 		attachment.Color = "#ef3232"
 	} else {
-		attachment.Text = fmt.Sprintf("Your transaction %s is being watched and you will be notified of each block until %d confirmations have occured", watchTx.TxId, watchTx.Confs)
+		attachment.Text = fmt.Sprintf("Your transaction %s on %s is being watched and you will be notified of each block until %d confirmations have occured", watchTx.TxId, network, watchTx.Confs)
 		attachment.Color = "#4af030"
 	}
 	_, _, err := client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))

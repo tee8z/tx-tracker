@@ -5,6 +5,11 @@ type MempoolListen struct {
 	Data   []string `json:"data"`
 }
 
+type NewBlock struct {
+	IsNew   bool   `json:"isNew"`
+	Network string `json:"network"`
+}
+
 type WatchTx struct {
 	TxId       string  `json:"txId"`
 	Confs      int     `json:"confs"`
@@ -14,8 +19,8 @@ type WatchTx struct {
 }
 
 type ConfirmedPayload struct {
-	Confirmed   bool   `json:"confirmed"`
-	BlockHeight int    `json:"block_height"`
-	BlockHash   string `json:"block_hash"`
-	BlockTime   int    `json:"block_time"`
+	Confirmed   bool    `json:"confirmed"`
+	BlockHeight *int    `json:"block_height"`
+	BlockHash   *string `json:"block_hash"`
+	BlockTime   *int    `json:"block_time"`
 }

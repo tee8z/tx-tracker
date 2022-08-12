@@ -20,7 +20,7 @@ func main() {
 	token := os.Getenv("SLACK_AUTH_TOKEN")
 	appToken := os.Getenv("SLACK_APP_TOKEN")
 
-	newBlock := make(chan bool)
+	newBlock := make(chan models.NewBlock)
 	watchTransaction := make(chan models.WatchTx)
 
 	mempoolSpaceCtx, cancelMempoolSpace := context.WithCancel(context.Background())

@@ -3,7 +3,7 @@ Slack bot that will watch the bitcoin transactions based on ID
 - can watch on mainnet/testnet/signet, will use mainnet as default
 - has a dependency on mempool.space to keep track of the transactions and be notified when a new block comes in
 
-Follow along with the tutoiral for how to include this bot into your channel: 
+Follow along with this tutorial for how to include this bot into your channel & get the required .env values (the needed permissions will be the same as the 'Slack Events API Call' bot): 
 https://www.bacancytechnology.com/blog/develop-slack-bot-using-golang
 
 Install:
