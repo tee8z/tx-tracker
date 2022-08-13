@@ -80,7 +80,7 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 		attachment.Text = fmt.Sprintf("Failed to setup watcher, check your format? %s", errConv)
 		attachment.Color = "#ef3232"
 	} else {
-		attachment.Text = fmt.Sprintf("Your transaction %s on %s is being watched and you will be notified of each block until %d confirmations have occured", watchTx.TxId, network, watchTx.Confs)
+		attachment.Text = fmt.Sprintf("Your transaction %s on %s is being watched and you will be notified of each block until %d confirmations have occured", watchTx.TxID, network, watchTx.Confs)
 		attachment.Color = "#4af030"
 	}
 	_, _, err := client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
@@ -136,10 +136,11 @@ func ParseMessage(rawMessage string) (*models.WatchTx, error) {
 			confirms = &defaultCount
 		}
 		return &models.WatchTx{
-			TxId:       *txId,
-			Confs:      *confirms,
-			ConfsCount: 0,
-			Network:    network,
+			TxID:               *txId,
+			Confs:              *confirms,
+			ConfsCount:         0,
+			Network:            network,
+			ConfirmBlockHeight: 0,
 		}, nil
 	} else {
 		return nil, fmt.Errorf("a txId is required, in the format: 'txId: <transacitonId to watch>'")

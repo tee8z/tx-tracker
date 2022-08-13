@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -40,11 +41,23 @@ func ListenForBlocks(newBlock chan models.NewBlock, network string, mempoolSpace
 			log.Printf("error while reading message from mempool.space: %s", errRead.Error())
 			return
 		}
-		log.Printf("\nmessage %s", message)
+		var objmap map[string]json.RawMessage
+		err := json.Unmarshal(message, &objmap)
+		if err != nil {
+			log.Printf("\nerror while unmarshalling top level block object %s", err.Error())
+			continue
+		}
+		var block models.Block
+		errBlock := json.Unmarshal(objmap["block"], &block)
+		if errBlock != nil {
+			log.Printf("\nerror while unmarshalling block object %s", errBlock.Error())
+			continue
+		}
+		log.Printf("\nnew block message %s", message)
 		if len(network) == 0 {
-			newBlock <- models.NewBlock{IsNew: true, Network: nil}
+			newBlock <- models.NewBlock{IsNew: true, Network: nil, BlockHeight: block.Height}
 		} else {
-			newBlock <- models.NewBlock{IsNew: true, Network: &network}
+			newBlock <- models.NewBlock{IsNew: true, Network: &network, BlockHeight: block.Height}
 		}
 	}
 	ListenForBlocks(newBlock, network, mempoolSpaceCtx)
@@ -124,7 +137,7 @@ func ListenForUserTrans(set *utils.Set[models.WatchTx], watchTransaction chan mo
 			case newBlc := <-newBlock:
 				log.Printf("New Block %v", newBlc)
 				if newBlc.IsNew {
-					SendMessageForWatched(set, newBlc.Network, slackClient)
+					SendMessageForWatched(set, newBlc.Network, newBlc.BlockHeight, slackClient)
 				}
 			default:
 				time.Sleep(time.Second * 2)
@@ -134,46 +147,51 @@ func ListenForUserTrans(set *utils.Set[models.WatchTx], watchTransaction chan mo
 
 }
 
-func SendMessageForWatched(set *utils.Set[models.WatchTx], network *string, slackClient *slack.Client) {
+func SendMessageForWatched(set *utils.Set[models.WatchTx], network *string, curBlockHeight int, slackClient *slack.Client) {
 	formatNetwork := ""
 	if network != nil {
 		formatNetwork = *network
 	}
 	for _, watchTx := range set.Keys() {
-		log.Printf("\nnetwork: %s watchTx: %v", formatNetwork, watchTx)
-		if watchTx.Network != formatNetwork {
-			continue
-		}
-		if watchTx.ConfsCount > 0 && watchTx.Confs < (watchTx.ConfsCount+1) {
-			log.Printf("watching transaction has confsCount >0: %v", watchTx)
-			set.Remove(watchTx)
-			log.Printf("watchTx %v", watchTx)
-			watchTx.ConfsCount = watchTx.ConfsCount + 1
-			curTime := time.Now().UTC()
-			log.Printf("watchTx %v", watchTx)
-			set.Add(watchTx, curTime.Format("20060102150405"))
-			go SendUpdatedConfMessage(watchTx, slackClient)
-		} else if watchTx.ConfsCount == 0 {
-			log.Printf("watching transaction has confsCount = 0: %v", watchTx)
-			//check if in recent block
-			confirmed, err := CheckTransactionWasConfirmed(watchTx.TxId, watchTx.Network)
-			if err != nil {
-				log.Println(err)
+		for watchTx.ConfirmBlockHeight < curBlockHeight {
+			log.Printf("\nnetwork: %s watchTx: %v", formatNetwork, watchTx)
+			if watchTx.Network != formatNetwork {
+				log.Println("skipping")
 				continue
 			}
-			if !confirmed.Confirmed {
-				continue
+			if watchTx.ConfsCount > 0 && watchTx.Confs > (watchTx.ConfsCount+1) && watchTx.ConfirmBlockHeight < curBlockHeight {
+				log.Printf("\nwatching transaction has confsCount >0: %v", watchTx)
+				set.Remove(watchTx)
+				log.Printf("\nwatchTx %v", watchTx)
+				watchTx.ConfsCount = watchTx.ConfsCount + 1
+				watchTx.ConfirmBlockHeight = watchTx.ConfirmBlockHeight + 1
+				curTime := time.Now().UTC()
+				log.Printf("\nwatchTx %v", watchTx)
+				set.Add(watchTx, curTime.Format("20060102150405"))
+				go SendUpdatedConfMessage(watchTx, slackClient)
+			} else if watchTx.ConfsCount == 0 && watchTx.ConfirmBlockHeight < curBlockHeight {
+				log.Printf("watching transaction has confsCount = 0: %v", watchTx)
+				//check if in recent block
+				confirmed, err := CheckTransactionWasConfirmed(watchTx.TxID, watchTx.Network)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				if !confirmed.Confirmed {
+					continue
+				}
+				log.Printf("confirmed results %v", confirmed)
+				set.Remove(watchTx)
+				watchTx.ConfsCount = watchTx.ConfsCount + 1
+				watchTx.ConfirmBlockHeight = curBlockHeight
+				curTime := time.Now().UTC()
+				log.Printf("watchTx %v", watchTx)
+				set.Add(watchTx, curTime.Format("20060102150405"))
+				go SendFirstConfMessage(watchTx, *confirmed, slackClient)
+			} else if watchTx.ConfsCount > 0 && watchTx.Confs == watchTx.ConfsCount {
+				log.Printf("removing watchTx %v", watchTx)
+				set.Remove(watchTx)
 			}
-			log.Printf("confirmed results %v", confirmed)
-			set.Remove(watchTx)
-			watchTx.ConfsCount = watchTx.ConfsCount + 1
-			curTime := time.Now().UTC()
-			log.Printf("watchTx %v", watchTx)
-			set.Add(watchTx, curTime.Format("20060102150405"))
-			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
-		} else if watchTx.ConfsCount > 0 && watchTx.Confs == watchTx.ConfsCount {
-			log.Printf("removing watchTx %v", watchTx)
-			set.Remove(watchTx)
 		}
 	}
 
@@ -211,9 +229,36 @@ func CheckTransactionWasConfirmed(txId string, network string) (*models.Confirme
 	return confirmed, nil
 }
 
+func GetLastBlockHeight(network string) (*int, error) {
+	mempoolSpaceUrl := ""
+	if len(network) > 0 {
+		lowerNetwork := strings.ToLower(network)
+		mempoolSpaceUrl = fmt.Sprintf("https://mempool.space/%s/api/blocks/tip/height", lowerNetwork)
+	} else {
+		mempoolSpaceUrl = "https://mempool.space/api/blocks/tip/height"
+	}
+	resp, err := http.Get(mempoolSpaceUrl)
+	if err != nil {
+		log.Printf("failed to request out to mempool.space")
+		return nil, err
+	}
+	if resp.Body != nil {
+		defer resp.Body.Close()
+	}
+	heightRaw, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		log.Printf("failed to read body from response of mempool.space")
+		return nil, readErr
+	}
+	log.Printf("\nLast Block Height %s", heightRaw)
+	height := int(big.NewInt(0).SetBytes(heightRaw).Uint64())
+
+	return &height, nil
+}
+
 func SendFirstConfMessage(watchTx models.WatchTx, confirmed models.ConfirmedPayload, slackClient *slack.Client) {
 	attachment := slack.Attachment{}
-	attachment.Text = fmt.Sprintf("Your transaction %s has been picked up from the mempool and confirmed in block %s at %s! ", watchTx.TxId, *confirmed.BlockHash, utils.ConvertTimestamp(*confirmed.BlockTime))
+	attachment.Text = fmt.Sprintf("Your transaction %s has been picked up from the mempool and confirmed in block %s at %s! ", watchTx.TxID, *confirmed.BlockHash, utils.ConvertTimestamp(*confirmed.BlockTime))
 	attachment.Color = "#4af030"
 	_, _, err := slackClient.PostMessage(watchTx.Channel, slack.MsgOptionAttachments(attachment))
 	if err != nil {
@@ -223,7 +268,7 @@ func SendFirstConfMessage(watchTx models.WatchTx, confirmed models.ConfirmedPayl
 
 func SendUpdatedConfMessage(watchTx models.WatchTx, slackClient *slack.Client) {
 	attachment := slack.Attachment{}
-	attachment.Text = fmt.Sprintf("Your transaction %s has moved up a confirmation %d", watchTx.TxId, watchTx.ConfsCount)
+	attachment.Text = fmt.Sprintf("Your transaction %s has moved up a confirmation %d", watchTx.TxID, watchTx.ConfsCount)
 	attachment.Color = "#4af030"
 	_, _, err := slackClient.PostMessage(watchTx.Channel, slack.MsgOptionAttachments(attachment))
 	if err != nil {

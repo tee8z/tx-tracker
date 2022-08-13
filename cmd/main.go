@@ -73,16 +73,20 @@ func main() {
 
 	//request initial state of saved transactions after a restart
 	if len(set.Keys()) > 0 {
-		mempool.SendMessageForWatched(set, nil, slackClient)
-		testnet := "testnet"
-		mempool.SendMessageForWatched(set, &testnet, slackClient)
-		signet := "signet"
-		mempool.SendMessageForWatched(set, &signet, slackClient)
+		lastHeight, err := mempool.GetLastBlockHeight("")
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		mempool.SendMessageForWatched(set, nil, *lastHeight, slackClient)
+		//testnet := "testnet"
+		//mempool.SendMessageForWatched(set, &testnet, slackClient)
+		//signet := "signet"
+		//mempool.SendMessageForWatched(set, &signet, slackClient)
 	}
 	//listen for new blocks on each chain
-	go mempool.ListenForBlocks(newBlock, "", mempoolSpaceCtx)        //mainnet
-	go mempool.ListenForBlocks(newBlock, "testnet", mempoolSpaceCtx) //testnet
-	go mempool.ListenForBlocks(newBlock, "signet", mempoolSpaceCtx)  //signet
+	go mempool.ListenForBlocks(newBlock, "", mempoolSpaceCtx) //mainnet
+	//go mempool.ListenForBlocks(newBlock, "testnet", mempoolSpaceCtx) //testnet
+	//go mempool.ListenForBlocks(newBlock, "signet", mempoolSpaceCtx)  //signet
 
 	//update watched transactions as new block come in
 	go mempool.ListenForUserTrans(set, watchTransaction, newBlock, slackClient, listenUserTransCtx)
