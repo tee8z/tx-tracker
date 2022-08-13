@@ -78,15 +78,23 @@ func main() {
 			log.Fatalf(err.Error())
 		}
 		mempool.SendMessageForWatched(set, nil, *lastHeight, slackClient)
-		//testnet := "testnet"
-		//mempool.SendMessageForWatched(set, &testnet, slackClient)
-		//signet := "signet"
-		//mempool.SendMessageForWatched(set, &signet, slackClient)
+		testnet := "testnet"
+		lastHeightTestnet, err := mempool.GetLastBlockHeight(testnet)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		mempool.SendMessageForWatched(set, &testnet, *lastHeightTestnet, slackClient)
+		signet := "signet"
+		lastHeightSignet, err := mempool.GetLastBlockHeight(testnet)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		mempool.SendMessageForWatched(set, &signet, *lastHeightSignet, slackClient)
 	}
 	//listen for new blocks on each chain
-	go mempool.ListenForBlocks(newBlock, "", mempoolSpaceCtx) //mainnet
-	//go mempool.ListenForBlocks(newBlock, "testnet", mempoolSpaceCtx) //testnet
-	//go mempool.ListenForBlocks(newBlock, "signet", mempoolSpaceCtx)  //signet
+	go mempool.ListenForBlocks(newBlock, "", mempoolSpaceCtx)        //mainnet
+	go mempool.ListenForBlocks(newBlock, "testnet", mempoolSpaceCtx) //testnet
+	go mempool.ListenForBlocks(newBlock, "signet", mempoolSpaceCtx)  //signet
 
 	//update watched transactions as new block come in
 	go mempool.ListenForUserTrans(set, watchTransaction, newBlock, slackClient, listenUserTransCtx)

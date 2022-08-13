@@ -153,46 +153,46 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], network *string, curB
 		formatNetwork = *network
 	}
 	for _, watchTx := range set.Keys() {
-		for watchTx.ConfirmBlockHeight < curBlockHeight {
-			log.Printf("\nnetwork: %s watchTx: %v", formatNetwork, watchTx)
-			if watchTx.Network != formatNetwork {
-				log.Println("skipping")
+		if watchTx.Network != formatNetwork {
+			log.Println("skipping")
+			continue
+		}
+
+		log.Printf("\nnetwork: %s watchTx: %v", formatNetwork, watchTx)
+		if watchTx.ConfsCount > 0 && watchTx.Confs > (watchTx.ConfsCount+1) && watchTx.ConfirmBlockHeight < curBlockHeight {
+			log.Printf("\nwatching transaction has confsCount >0: %v", watchTx)
+			set.Remove(watchTx)
+			log.Printf("\nwatchTx %v", watchTx)
+			watchTx.ConfsCount = watchTx.ConfsCount + 1
+			watchTx.ConfirmBlockHeight = watchTx.ConfirmBlockHeight + 1
+			curTime := time.Now().UTC()
+			log.Printf("\nwatchTx %v", watchTx)
+			set.Add(watchTx, curTime.Format("20060102150405"))
+			go SendUpdatedConfMessage(watchTx, slackClient)
+		} else if watchTx.ConfsCount == 0 && watchTx.ConfirmBlockHeight < curBlockHeight {
+			log.Printf("watching transaction has confsCount = 0: %v", watchTx)
+			//check if in recent block
+			confirmed, err := CheckTransactionWasConfirmed(watchTx.TxID, watchTx.Network)
+			if err != nil {
+				log.Println(err)
 				continue
 			}
-			if watchTx.ConfsCount > 0 && watchTx.Confs > (watchTx.ConfsCount+1) && watchTx.ConfirmBlockHeight < curBlockHeight {
-				log.Printf("\nwatching transaction has confsCount >0: %v", watchTx)
-				set.Remove(watchTx)
-				log.Printf("\nwatchTx %v", watchTx)
-				watchTx.ConfsCount = watchTx.ConfsCount + 1
-				watchTx.ConfirmBlockHeight = watchTx.ConfirmBlockHeight + 1
-				curTime := time.Now().UTC()
-				log.Printf("\nwatchTx %v", watchTx)
-				set.Add(watchTx, curTime.Format("20060102150405"))
-				go SendUpdatedConfMessage(watchTx, slackClient)
-			} else if watchTx.ConfsCount == 0 && watchTx.ConfirmBlockHeight < curBlockHeight {
-				log.Printf("watching transaction has confsCount = 0: %v", watchTx)
-				//check if in recent block
-				confirmed, err := CheckTransactionWasConfirmed(watchTx.TxID, watchTx.Network)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				if !confirmed.Confirmed {
-					continue
-				}
-				log.Printf("confirmed results %v", confirmed)
-				set.Remove(watchTx)
-				watchTx.ConfsCount = watchTx.ConfsCount + 1
-				watchTx.ConfirmBlockHeight = curBlockHeight
-				curTime := time.Now().UTC()
-				log.Printf("watchTx %v", watchTx)
-				set.Add(watchTx, curTime.Format("20060102150405"))
-				go SendFirstConfMessage(watchTx, *confirmed, slackClient)
-			} else if watchTx.ConfsCount > 0 && watchTx.Confs == watchTx.ConfsCount {
-				log.Printf("removing watchTx %v", watchTx)
-				set.Remove(watchTx)
+			if !confirmed.Confirmed {
+				continue
 			}
+			log.Printf("confirmed results %v", confirmed)
+			set.Remove(watchTx)
+			watchTx.ConfsCount = watchTx.ConfsCount + 1
+			watchTx.ConfirmBlockHeight = curBlockHeight
+			curTime := time.Now().UTC()
+			log.Printf("watchTx %v", watchTx)
+			set.Add(watchTx, curTime.Format("20060102150405"))
+			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
+		} else if watchTx.ConfsCount > 0 && watchTx.Confs == watchTx.ConfsCount {
+			log.Printf("removing watchTx %v", watchTx)
+			set.Remove(watchTx)
 		}
+
 	}
 
 }
