@@ -13,7 +13,7 @@ https://www.bacancytechnology.com/blog/develop-slack-bot-using-golang
  - ``
 ### Run Bot: 
 (make sure to change default.env to .env & update the values first):
-- `go run cmd/main.go`
+- `go run cmd/tx-tracker/main.go`
 
 #### How to use in channel:
 - bot command options:

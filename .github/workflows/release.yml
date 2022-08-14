@@ -22,7 +22,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-          project_path: "./cmd/main"
+          project_path: "./cmd/tx-tracker"
           binary_name: "tx-tracker"
           ldflags: "-s -w"
           extra_files: LICENSE Readme.md
