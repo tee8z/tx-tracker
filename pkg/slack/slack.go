@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"tx-tracker/pkg/models"
 
@@ -135,12 +136,14 @@ func ParseMessage(rawMessage string) (*models.WatchTx, error) {
 			defaultCount := 6
 			confirms = &defaultCount
 		}
+		timeRequest := time.Now().UTC().Unix()
 		return &models.WatchTx{
 			TxID:               *txId,
 			Confs:              *confirms,
 			ConfsCount:         0,
 			Network:            network,
 			ConfirmBlockHeight: 0,
+			TimeRequested:      timeRequest,
 		}, nil
 	} else {
 		return nil, fmt.Errorf("a txId is required, in the format: 'txId: <transacitonId to watch>'")

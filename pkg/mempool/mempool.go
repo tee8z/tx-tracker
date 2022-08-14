@@ -20,6 +20,9 @@ import (
 )
 
 func ListenForBlocks(newBlock chan models.NewBlock, network string, mempoolSpaceCtx context.Context) {
+	if network == "mainnet" {
+		network = ""
+	}
 	closeByApi, errRegex := regexp.Compile(`(close 1006 \(abnormal closure\))`)
 	if errRegex != nil {
 		log.Fatal(errRegex)
@@ -54,16 +57,15 @@ func ListenForBlocks(newBlock chan models.NewBlock, network string, mempoolSpace
 			continue
 		}
 		log.Printf("\nnew block message %s", message)
-		if len(network) == 0 {
-			newBlock <- models.NewBlock{IsNew: true, Network: nil, BlockHeight: block.Height}
-		} else {
-			newBlock <- models.NewBlock{IsNew: true, Network: &network, BlockHeight: block.Height}
-		}
+		newBlock <- models.NewBlock{IsNew: true, Network: network, BlockHeight: block.Height}
 	}
 	ListenForBlocks(newBlock, network, mempoolSpaceCtx)
 }
 
 func SetupClient(network string, mempoolSpaceCtx context.Context) (*websocket.Conn, error) {
+	if network == "mainnet" {
+		network = ""
+	}
 	connnectionString := url.URL{
 		Scheme: "wss",
 		Host:   "mempool.space",
@@ -147,24 +149,22 @@ func ListenForUserTrans(set *utils.Set[models.WatchTx], watchTransaction chan mo
 
 }
 
-func SendMessageForWatched(set *utils.Set[models.WatchTx], network *string, curBlockHeight int, slackClient *slack.Client) {
-	formatNetwork := ""
-	if network != nil {
-		formatNetwork = *network
-	}
+func SendMessageForWatched(set *utils.Set[models.WatchTx], network string, curBlockHeight int, slackClient *slack.Client) {
+
 	for _, watchTx := range set.Keys() {
-		if watchTx.Network != formatNetwork {
-			log.Println("skipping")
+		log.Printf("\nnetwork: %s watchTx: %v curBlockHeight: %d", network, watchTx, curBlockHeight)
+
+		if watchTx.Network != network {
+			log.Println("\n skipping")
 			continue
 		}
 
-		log.Printf("\nnetwork: %s watchTx: %v", formatNetwork, watchTx)
-		if watchTx.ConfsCount > 0 && watchTx.Confs > (watchTx.ConfsCount+1) && watchTx.ConfirmBlockHeight < curBlockHeight {
+		if watchTx.ConfsCount > 0 && (watchTx.ConfsCount+1) < watchTx.Confs && watchTx.ConfirmBlockHeight < curBlockHeight {
 			log.Printf("\nwatching transaction has confsCount >0: %v", watchTx)
 			set.Remove(watchTx)
 			log.Printf("\nwatchTx %v", watchTx)
 			watchTx.ConfsCount = watchTx.ConfsCount + 1
-			watchTx.ConfirmBlockHeight = watchTx.ConfirmBlockHeight + 1
+			watchTx.ConfirmBlockHeight = curBlockHeight
 			curTime := time.Now().UTC()
 			log.Printf("\nwatchTx %v", watchTx)
 			set.Add(watchTx, curTime.Format("20060102150405"))
@@ -188,17 +188,21 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], network *string, curB
 			log.Printf("watchTx %v", watchTx)
 			set.Add(watchTx, curTime.Format("20060102150405"))
 			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
-		} else if watchTx.ConfsCount > 0 && watchTx.Confs == watchTx.ConfsCount {
+		} else if watchTx.ConfsCount > 0 && watchTx.ConfsCount == watchTx.Confs {
 			log.Printf("removing watchTx %v", watchTx)
 			set.Remove(watchTx)
+		} else {
+			log.Printf("\n didnt hit any matching")
 		}
-
 	}
 
+	utils.RemoveOldItems(set, time.Now().UTC().Unix())
 }
 
 func CheckTransactionWasConfirmed(txId string, network string) (*models.ConfirmedPayload, error) {
-
+	if network == "mainnet" {
+		network = ""
+	}
 	mempoolSpaceUrl := ""
 	if len(network) > 0 {
 		lowerNetwork := strings.ToLower(network)
@@ -230,6 +234,9 @@ func CheckTransactionWasConfirmed(txId string, network string) (*models.Confirme
 }
 
 func GetLastBlockHeight(network string) (*int, error) {
+	if network == "mainnet" {
+		network = ""
+	}
 	mempoolSpaceUrl := ""
 	if len(network) > 0 {
 		lowerNetwork := strings.ToLower(network)

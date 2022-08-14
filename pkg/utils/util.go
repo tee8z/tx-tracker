@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"time"
+	"tx-tracker/pkg/models"
 )
 
 func ConvertTimestamp(unixTime int) string {
@@ -78,4 +79,12 @@ func Save[T comparable](filename string, toSave *Set[T]) error {
 	}
 
 	return nil
+}
+
+func RemoveOldItems(toCheck *Set[models.WatchTx], unixTimeNow int64) {
+	for _, key := range toCheck.Keys() {
+		if key.TimeRequested > unixTimeNow {
+			toCheck.Remove(key)
+		}
+	}
 }

@@ -6,9 +6,9 @@ type MempoolListen struct {
 }
 
 type NewBlock struct {
-	IsNew       bool    `json:"is_new"`
-	Network     *string `json:"network"`
-	BlockHeight int     `json:"block_height"`
+	IsNew       bool   `json:"is_new"`
+	Network     string `json:"network"`
+	BlockHeight int    `json:"block_height"`
 }
 
 type WatchTx struct {
@@ -18,6 +18,7 @@ type WatchTx struct {
 	Channel            string `json:"channel"`
 	ConfsCount         int    `json:"confs_count"`
 	ConfirmBlockHeight int    `json:"confirm_block_height"`
+	TimeRequested      int64  `json:"time_requested"`
 }
 
 type ConfirmedPayload struct {

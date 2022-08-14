@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"os/signal"
+	"strings"
+	"time"
 
 	"log"
 	"os"
@@ -16,7 +18,7 @@ import (
 	"github.com/slack-go/slack/socketmode"
 )
 
-func HandleSignals[T comparable](cancel func(), fileName string, toSave *utils.Set[T]) {
+func HandleSignals[T comparable](cancel func(), fileName string, toSave *utils.Set[models.WatchTx]) {
 	// register signal handler
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -29,6 +31,7 @@ func HandleSignals[T comparable](cancel func(), fileName string, toSave *utils.S
 
 		for sig := range c {
 			if !forced {
+				utils.RemoveOldItems(toSave, time.Now().UTC().Unix())
 				utils.Save(fileName, toSave)
 				log.Printf("Shutting down bot (%v)", sig)
 				cancel()
@@ -49,6 +52,8 @@ func main() {
 	token := os.Getenv("SLACK_AUTH_TOKEN")
 	appToken := os.Getenv("SLACK_APP_TOKEN")
 	filename := os.Getenv("SAVE_FILE")
+	networksToWatchRaw := os.Getenv("NETWORKS_TO_WATCH")
+	networksToWatch := strings.Split(networksToWatchRaw, ", ")
 	set := utils.NewSet[models.WatchTx]()
 
 	//load state of saved transactions
@@ -56,6 +61,7 @@ func main() {
 	if errLoad != nil {
 		log.Fatalf(errLoad.Error())
 	}
+	utils.RemoveOldItems(set, time.Now().UTC().Unix())
 
 	newBlock := make(chan models.NewBlock)
 	watchTransaction := make(chan models.WatchTx)
@@ -65,7 +71,7 @@ func main() {
 	defer close(newBlock)
 
 	//setup to gracefully handle shutdown from interupt signal
-	HandleSignals(cancelMempoolSpace, filename, set)
+	HandleSignals[models.WatchTx](cancelMempoolSpace, filename, set)
 
 	slackClient := slack.New(token, slack.OptionDebug(true), slack.OptionAppLevelToken(appToken))
 	listenUserTransCtx, cancelUserListen := context.WithCancel(mempoolSpaceCtx)
@@ -73,29 +79,20 @@ func main() {
 
 	//request initial state of saved transactions after a restart
 	if len(set.Keys()) > 0 {
-		lastHeight, err := mempool.GetLastBlockHeight("")
-		if err != nil {
-			log.Fatalf(err.Error())
+		for index := range networksToWatch {
+			curNetwork := networksToWatch[index]
+			lastHeight, err := mempool.GetLastBlockHeight(curNetwork)
+			if err != nil {
+				log.Fatalf(err.Error())
+			}
+			mempool.SendMessageForWatched(set, curNetwork, *lastHeight, slackClient)
 		}
-		mempool.SendMessageForWatched(set, nil, *lastHeight, slackClient)
-		testnet := "testnet"
-		lastHeightTestnet, err := mempool.GetLastBlockHeight(testnet)
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
-		mempool.SendMessageForWatched(set, &testnet, *lastHeightTestnet, slackClient)
-		signet := "signet"
-		lastHeightSignet, err := mempool.GetLastBlockHeight(testnet)
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
-		mempool.SendMessageForWatched(set, &signet, *lastHeightSignet, slackClient)
 	}
-	//listen for new blocks on each chain
-	go mempool.ListenForBlocks(newBlock, "", mempoolSpaceCtx)        //mainnet
-	go mempool.ListenForBlocks(newBlock, "testnet", mempoolSpaceCtx) //testnet
-	go mempool.ListenForBlocks(newBlock, "signet", mempoolSpaceCtx)  //signet
-
+	for index := range networksToWatch { //loop through networks
+		curNetwork := networksToWatch[index]
+		//listen for new blocks on each chain
+		go mempool.ListenForBlocks(newBlock, curNetwork, mempoolSpaceCtx)
+	}
 	//update watched transactions as new block come in
 	go mempool.ListenForUserTrans(set, watchTransaction, newBlock, slackClient, listenUserTransCtx)
 
