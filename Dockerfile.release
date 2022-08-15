@@ -1,8 +1,8 @@
-FROM ubuntu:22.04
+FROM alpine:3.16
 ARG version="v0.1.7"
 
-RUN apt-get update \
-    && apt-get install -y wget \
+RUN apk update \
+    && apk add --no-cache openssl wget coreutils libc6-compat \
     && wget "https://github.com/tee8z/tx-tracker/releases/download/${version}/tx-tracker-${version}-linux-amd64.tar.gz" \
     && wget "https://github.com/tee8z/tx-tracker/releases/download/${version}/tx-tracker-${version}-linux-amd64.tar.gz.md5" \
     && echo "$(cat tx-tracker-${version}-linux-amd64.tar.gz.md5)" tx-tracker-${version}-linux-amd64.tar.gz |  md5sum -c - \
