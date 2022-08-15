@@ -159,7 +159,7 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], network string, curBl
 			continue
 		}
 
-		if watchTx.ConfsCount > 0 && (watchTx.ConfsCount+1) < watchTx.Confs && watchTx.ConfirmBlockHeight < curBlockHeight {
+		if watchTx.ConfsCount > 0 && (watchTx.ConfsCount+1) != watchTx.Confs && watchTx.ConfirmBlockHeight < curBlockHeight {
 			log.Printf("\nwatching transaction has confsCount >0: %v", watchTx)
 			set.Remove(watchTx)
 			log.Printf("\nwatchTx %v", watchTx)
@@ -169,7 +169,7 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], network string, curBl
 			log.Printf("\nwatchTx %v", watchTx)
 			set.Add(watchTx, curTime.Format("20060102150405"))
 			go SendUpdatedConfMessage(watchTx, slackClient)
-		} else if watchTx.ConfsCount == 0 && watchTx.ConfirmBlockHeight < curBlockHeight {
+		} else if watchTx.ConfsCount == 0 {
 			log.Printf("watching transaction has confsCount = 0: %v", watchTx)
 			//check if in recent block
 			confirmed, err := CheckTransactionWasConfirmed(watchTx.TxID, watchTx.Network)
@@ -188,8 +188,10 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], network string, curBl
 			log.Printf("watchTx %v", watchTx)
 			set.Add(watchTx, curTime.Format("20060102150405"))
 			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
-		} else if watchTx.ConfsCount > 0 && watchTx.ConfsCount == watchTx.Confs {
+		} else if (watchTx.ConfsCount + 1) == watchTx.Confs {
 			log.Printf("removing watchTx %v", watchTx)
+			watchTx.ConfsCount = watchTx.Confs
+			go SendFinalMessage(watchTx, slackClient)
 			set.Remove(watchTx)
 		} else {
 			log.Printf("\n didnt hit any matching")
@@ -276,6 +278,16 @@ func SendFirstConfMessage(watchTx models.WatchTx, confirmed models.ConfirmedPayl
 func SendUpdatedConfMessage(watchTx models.WatchTx, slackClient *slack.Client) {
 	attachment := slack.Attachment{}
 	attachment.Text = fmt.Sprintf("Your transaction %s has moved up a confirmation %d", watchTx.TxID, watchTx.ConfsCount)
+	attachment.Color = "#4af030"
+	_, _, err := slackClient.PostMessage(watchTx.Channel, slack.MsgOptionAttachments(attachment))
+	if err != nil {
+		log.Printf("failed to post message: %s", err.Error())
+	}
+}
+
+func SendFinalMessage(watchTx models.WatchTx, slackClient *slack.Client) {
+	attachment := slack.Attachment{}
+	attachment.Text = fmt.Sprintf("The transaction %s has moved up to your limit of confirmations %d and you will no longer be notified", watchTx.TxID, watchTx.ConfsCount)
 	attachment.Color = "#4af030"
 	_, _, err := slackClient.PostMessage(watchTx.Channel, slack.MsgOptionAttachments(attachment))
 	if err != nil {

@@ -83,7 +83,8 @@ func Save[T comparable](filename string, toSave *Set[T]) error {
 
 func RemoveOldItems(toCheck *Set[models.WatchTx], unixTimeNow int64) {
 	for _, key := range toCheck.Keys() {
-		if key.TimeRequested > unixTimeNow {
+		twoWeeks := time.Unix(key.TimeRequested, 0).UTC().AddDate(0, 0, 14).Unix()
+		if twoWeeks < unixTimeNow {
 			toCheck.Remove(key)
 		}
 	}
