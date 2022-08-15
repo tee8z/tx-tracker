@@ -190,9 +190,9 @@ func SendMessageForWatched(set *utils.Set[models.WatchTx], network string, curBl
 			go SendFirstConfMessage(watchTx, *confirmed, slackClient)
 		} else if (watchTx.ConfsCount + 1) == watchTx.Confs {
 			log.Printf("removing watchTx %v", watchTx)
+			set.Remove(watchTx)
 			watchTx.ConfsCount = watchTx.Confs
 			go SendFinalMessage(watchTx, slackClient)
-			set.Remove(watchTx)
 		} else {
 			log.Printf("\n didnt hit any matching")
 		}

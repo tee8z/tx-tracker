@@ -17,7 +17,7 @@ https://www.bacancytechnology.com/blog/develop-slack-bot-using-golang
 
 #### How to use in channel:
 - bot command options:
-    - asking to watch a bitcoin transaction on mainnet for 6 confirmations:
+    - asking to watch a bitcoin transaction on mainnet for 3 confirmations:
     
     - asking to watch a bitcoin transaction on testnet for 3 confirmations:
 
