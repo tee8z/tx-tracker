@@ -46,9 +46,12 @@ func HandleSignals[T comparable](cancel func(), fileName string, toSave *utils.S
 }
 
 func main() {
-
+	devEnvPath := ".env"
+	if len(os.Args) == 1 {
+		devEnvPath = os.Args[1]
+	}
 	//load .env variables
-	godotenv.Load(".env")
+	godotenv.Load(devEnvPath)
 	token := os.Getenv("SLACK_AUTH_TOKEN")
 	appToken := os.Getenv("SLACK_APP_TOKEN")
 	filename := os.Getenv("SAVE_FILE")

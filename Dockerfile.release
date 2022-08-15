@@ -1,0 +1,15 @@
+FROM alpine:3.16.2
+ARG release_version="v0.1.4"
+
+RUN apk --update add openssl wget coreutils \
+    \
+    && rm -rf /var/cache/apk/* \ 
+    && wget "https://github.com/tee8z/tx-tracker/releases/download/${release_version}/tx-tracker-${release_version}-linux-amd64.tar.gz" \
+    && wget "https://github.com/tee8z/tx-tracker/releases/download/${release_version}/tx-tracker-${release_version}-linux-amd64.tar.gz.md5" \
+    && echo "$(cat tx-tracker-${release_version}-linux-amd64.tar.gz.md5)" tx-tracker-${release_version}-linux-amd64.tar.gz |  md5sum -c - \
+    && mkdir service \
+    && tar -xvzf "tx-tracker-${release_version}-linux-amd64.tar.gz" -C /service \
+    && chmod +755 /service/tx-tracker \
+    && rm tx-tracker-${release_version}-linux-amd64.tar.gz.md5 \
+    && rm tx-tracker-${release_version}-linux-amd64.tar.gz
+CMD ["./service/tx-tracker"]
