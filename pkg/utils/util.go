@@ -3,6 +3,7 @@ package utils
 import (
 	"compress/gzip"
 	"encoding/gob"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -20,6 +21,7 @@ func Load[T comparable](filename string, toLoad *Set[T]) error {
 
 	fi, err := os.Open(filename)
 	if err != nil {
+		fmt.Println("ERROR IN LOAD")
 		noFile := regexp.MustCompile("(no such file or directory)")
 		notFound := noFile.Find([]byte(err.Error()))
 		if notFound == nil {
