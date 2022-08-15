@@ -12,4 +12,4 @@ RUN apk --update add openssl wget coreutils \
     && chmod +755 /service/tx-tracker \
     && rm tx-tracker-${release_version}-linux-amd64.tar.gz.md5 \
     && rm tx-tracker-${release_version}-linux-amd64.tar.gz
-CMD ["./service/tx-tracker"]
+CMD ["./service/tx-tracker", ".env"]
