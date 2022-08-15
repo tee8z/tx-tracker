@@ -1,15 +1,18 @@
 FROM alpine:3.16.2
-ARG version="v0.1.5"
+ARG version="v0.1.6"
 
-RUN apk --update add openssl wget coreutils \
+RUN apk --update add --no-cache openssl wget coreutils \
     \
+    && addgroup -S tracker && adduser -S tracker -G tracker \
     && rm -rf /var/cache/apk/* \ 
     && wget "https://github.com/tee8z/tx-tracker/releases/download/${version}/tx-tracker-${version}-linux-amd64.tar.gz" \
     && wget "https://github.com/tee8z/tx-tracker/releases/download/${version}/tx-tracker-${version}-linux-amd64.tar.gz.md5" \
     && echo "$(cat tx-tracker-${version}-linux-amd64.tar.gz.md5)" tx-tracker-${version}-linux-amd64.tar.gz |  md5sum -c - \
     && mkdir service \
     && tar -xvzf "tx-tracker-${version}-linux-amd64.tar.gz" -C /service \
-    && chmod +755 /service/tx-tracker \
+    && chown -R tracker:tracker /service/tx-tracker \
+    && chmod +777 /service/tx-tracker \
     && rm tx-tracker-${version}-linux-amd64.tar.gz.md5 \
     && rm tx-tracker-${version}-linux-amd64.tar.gz
-CMD ["./service/tx-tracker", ".env"]
+USER tracker
+CMD ["/service/tx-tracker"]
