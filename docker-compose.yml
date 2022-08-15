@@ -1,0 +1,8 @@
+version: '3.9'
+services:
+  tx-tracker:
+    build: 
+      context: .
+      dockerfile: Dockerfile.release
+    env_file:
+      - .env
