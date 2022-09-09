@@ -208,7 +208,7 @@ func CheckTransactionWasConfirmed(txId string, network string) (*models.Confirme
 	mempoolSpaceUrl := ""
 	if len(network) > 0 {
 		lowerNetwork := strings.ToLower(network)
-		mempoolSpaceUrl = fmt.Sprintf("https://mempool.space/%s/api/tx/%s/status", txId, lowerNetwork)
+		mempoolSpaceUrl = fmt.Sprintf("https://mempool.space/%s/api/tx/%s/status", lowerNetwork, txId)
 	} else {
 		mempoolSpaceUrl = fmt.Sprintf("https://mempool.space/api/tx/%s/status", txId)
 	}
