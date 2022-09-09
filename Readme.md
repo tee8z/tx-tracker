@@ -18,7 +18,7 @@ Slack bot that will watch the bitcoin transactions based on ID
 
 ### Install Binary On Linux
 - Create a bot and grab it's SLACK_AUTH_TOKEN & SLACK_APP_TOKEN by following this guide (the needed permissions will be the same as the 'Slack Events API Call' bot): https://www.bacancytechnology.com/blog/
-- Run `./download.sh -v <release version> ` from the root of the repo, the possible release to download are on this project github 
+- Run `./download.sh -v <release version> ` from the root of the repo, the possible releases to download are on this project's github 
 - Update the `.env` file in the newly created `service` folder to include SLACK_AUTH_TOKEN & SLACK_APP_TOKEN
 - Run `./install.sh` from the root of the repo to create a background systemd service name `tx-tracker`
 - Use `systemctl status tx-tracker` to check the service is up and running
